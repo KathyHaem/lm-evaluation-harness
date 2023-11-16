@@ -6,6 +6,7 @@ import sacrebleu
 import sklearn.metrics
 import random
 
+from typing import List, Tuple
 
 def mean(arr):
     return sum(arr) / len(arr)
@@ -234,19 +235,47 @@ def bootstrap_stderr(f, xs, iters):
     return sample_stddev(res)
 
 
+def bootstrap_sacrebleu(f, xs: List[Tuple[str, List[str]]], iters):
+    """
+    f: metric function, if called will go through sacrebleu
+    xs: items = List of Tuples where 0 is reference, 1 is a list of hypotheses (contains one)
+    iters: int how many iterations to run the bootstrapping for
+    """
+
+    metrics = {
+        "bleu": sacrebleu.BLEU,
+        "chrf": sacrebleu.CHRF,
+        "ter": sacrebleu.TER
+    }
+
+    metric_name = f.__name__
+    refs = list(zip(*xs))[0]
+    preds = list(zip(*xs))[1]
+    refs, preds = _sacreformat(refs, preds)
+    metric = metrics[metric_name]()
+    score = metric.corpus_score(hypotheses=preds, references=refs, n_bootstrap=iters)
+    return score._ci
+
+
 def stderr_for_metric(metric, bootstrap_iters):
     bootstrappable = [
         median,
         matthews_corrcoef,
         f1_score,
-        perplexity,
+        perplexity
+    ]
+
+    sacrebleu_bootstrappable = [
         bleu,
         chrf,
-        ter,
+        ter
     ]
 
     if metric in bootstrappable:
         return lambda x: bootstrap_stderr(metric, x, iters=bootstrap_iters)
+
+    if metric in sacrebleu_bootstrappable:
+        return lambda x: bootstrap_sacrebleu(metric, x, iters=bootstrap_iters)
 
     stderr = {mean: mean_stderr, acc_all: acc_all_stderr}
 
