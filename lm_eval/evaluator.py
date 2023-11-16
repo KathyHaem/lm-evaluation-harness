@@ -364,6 +364,7 @@ def evaluate(
         # hotfix: bleu, chrf, ter seem to be really expensive to bootstrap
         # so we run them less iterations. still looking for a cleaner way to do this
 
+        # grab bootstrap function
         stderr = lm_eval.metrics.stderr_for_metric(
             metric=task.aggregation()[real_metric],
             bootstrap_iters=min(bootstrap_iters, 1000)
@@ -371,6 +372,7 @@ def evaluate(
             else bootstrap_iters,
         )
 
+        # call bootstrap function here
         if stderr is not None:
             results[task_name][metric + "_stderr"] = stderr(items)
 

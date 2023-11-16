@@ -219,6 +219,7 @@ def bootstrap_stderr(f, xs, iters):
     from tqdm import tqdm
 
     print("bootstrapping for stddev:", f.__name__)
+    # this loop is what actually wound up calling sacrebleu a thousand times
     for bootstrap in tqdm(
         pool.imap(
             _bootstrap_internal(f, chunk_size),

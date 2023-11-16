@@ -14,7 +14,7 @@ from pprint import pprint
 from sacrebleu import sacrebleu
 from lm_eval import metrics
 from lm_eval.base import Task, rf
-from typing import List
+from typing import List, Dict
 
 try:
     import nagisa
@@ -186,7 +186,7 @@ class GeneralTranslationTask(Task):
         """
         return rf.greedy_until(ctx, {"until": ["\n"]})
 
-    def process_results(self, doc, results):
+    def process_results(self, doc: Dict[str, str], results: List[str]):
         # Add spaces between words for BLEU score calculation of target languages like Chinese
         tar_lang_code = self.sacrebleu_language_pair.split("-")[-1]
         if tar_lang_code in NO_SPACE_LANG:
