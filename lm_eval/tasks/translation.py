@@ -10,6 +10,7 @@ https://github.com/mjpost/sacrebleu/blob/master/sacrebleu/dataset.py
 Homepage: https://github.com/mjpost/sacrebleu/blob/master/sacrebleu/dataset.py
 """
 import pycountry
+import os
 from pprint import pprint
 from sacrebleu import sacrebleu
 from lm_eval import metrics
@@ -25,6 +26,8 @@ except ImportError:
 
 try:
     import jieba
+    jieba.dt.tmp_dir = os.path.join(os.getcwd(), "jieba_tmp")
+    os.mkdirs(jieba.dt.tmp_dir, exist_ok=True)
 
     HAS_JIEBA = True
 except ImportError:
