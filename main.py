@@ -3,6 +3,8 @@ import json
 import logging
 import os
 
+from typing import Union
+
 from lm_eval import tasks, evaluator, utils
 
 logging.getLogger("openai").setLevel(logging.WARNING)

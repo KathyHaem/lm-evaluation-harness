@@ -31,6 +31,8 @@ except ImportError:
 
 try:
     import jieba
+    jieba.dt.tmp_dir = os.path.join(os.getcwd(), "jieba_tmp")
+    os.mkdirs(jieba.dt.tmp_dir, exist_ok=True)
 
     HAS_JIEBA = True
 except ImportError:
