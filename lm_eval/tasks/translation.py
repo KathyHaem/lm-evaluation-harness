@@ -9,12 +9,18 @@ https://github.com/mjpost/sacrebleu/blob/master/sacrebleu/dataset.py
 
 Homepage: https://github.com/mjpost/sacrebleu/blob/master/sacrebleu/dataset.py
 """
+import json
+import os
+from typing import List, Dict
+
+import fasttext
 import pycountry
-from pprint import pprint
+import requests
+import wget
 from sacrebleu import sacrebleu
+
 from lm_eval import metrics
 from lm_eval.base import Task, rf
-from typing import List, Dict
 
 try:
     import nagisa
@@ -122,6 +128,7 @@ class GeneralTranslationTask(Task):
         self.sacrebleu_dataset = sacrebleu_dataset
         self.sacrebleu_language_pair = sacrebleu_language_pair
         self.src_file = self.ref_file = self.src_data = self.ref_data = None
+        self.lang_id_model = None
 
         super().__init__()
 
@@ -200,7 +207,25 @@ class GeneralTranslationTask(Task):
             "bleu": ref_pred,
             "chrf": ref_pred,
             "ter": ref_pred,
+            "trigram_div": ref_pred,
+            "lang_id": self.lang_id(results[0]) == tar_lang_code
         }
+
+    def load_lang_id_model(self):
+        if not os.path.isfile("../../lid201-model.ftz"):
+            wget.download("https://data.statmt.org/lid/lid201-model.ftz", out="../../")
+        self.lang_id_model = fasttext.load_model("../../lid201-model.ftz")
+
+    def lang_id(self, item):
+        if not self.lang_id_model:
+            pass
+            # todo load the fasttext model
+        # todo load the fasttext model ourselves, but I wanted to see results faster
+        inference_url = 'https://api.wikimedia.org/service/lw/inference/v1/models/langid:predict'
+        data = {"text": item}
+        response = requests.post(inference_url, headers={}, data=json.dumps(data))
+        lang_code = response.json()["wikicode"]
+        return lang_code
 
     def aggregation(self):
         """
@@ -212,6 +237,8 @@ class GeneralTranslationTask(Task):
             "bleu": metrics.bleu,
             "chrf": metrics.chrf,
             "ter": metrics.ter,
+            "trigram_div": metrics.ngram_div,
+            "lang_id": metrics.mean
         }
 
     def higher_is_better(self):
@@ -224,6 +251,8 @@ class GeneralTranslationTask(Task):
             "bleu": True,
             "chrf": True,
             "ter": False,
+            "trigram_div": True,
+            "lang_id": True  # because it's 1 whenever the lang ID matches
         }
 
     def __str__(self):

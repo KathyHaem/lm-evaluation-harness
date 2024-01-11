@@ -108,6 +108,97 @@ def weighted_perplexity(items):
 def bits_per_byte(items):
     return -weighted_mean(items) / math.log(2)
 
+#### from https://github.com/gianwiher/decoding-NLG ####
+
+def calc_repetitions(sequences):
+    """
+    code adapted from https://github.com/ari-holtzman/degen/blob/master/metrics/repetition.py
+
+    returns a list of dicts which contains detailed fields on how each
+    example is repeating itself, specifically the phrase the generation is repeating
+    and how many times it is repeated.
+    """
+
+    objs = []
+    max_n = 90
+    n_repeated_examples = 0
+
+    for gen in sequences:
+        obj = {}
+        rev_gen = list(reversed(gen))
+        last_n_repeats = [0] * max_n
+
+        for n in range(1, max_n + 1):
+            n_repeat = 1
+            while (
+                len(rev_gen[n * n_repeat : n * (n_repeat + 1)]) == n
+                and rev_gen[n * n_repeat : n * (n_repeat + 1)] == rev_gen[:n]
+            ):
+                n_repeat += 1
+            last_n_repeats[n - 1] = n_repeat
+        max_repeated_n = max(range(max_n), key=lambda x: last_n_repeats[x])
+        if last_n_repeats[max_repeated_n] > 1 and (
+            max_repeated_n + 1 >= 3 or last_n_repeats[max_repeated_n] > 50
+        ):
+            obj["repetition"] = {
+                "repeated_phrase": list(reversed(rev_gen[: max_repeated_n + 1])),
+                "repeated_times": last_n_repeats[max_repeated_n],
+                "repeated_phrase_length": max_repeated_n + 1,
+            }
+            n_repeated_examples += 1
+        else:
+            obj["repetition"] = None
+
+        objs.append(obj)
+
+    return objs
+
+
+def get_k_grams(sequence, k):
+    """Returns the k-grams of the input sequence"""
+
+    grams = []
+    if len(sequence) < k:
+        print(f"Warning: input sequence len is {len(sequence)} but k is {k}")
+        return np.nan
+
+    for i in range(len(sequence) - k + 1):
+        grams.append(tuple(sequence[i : i + k]))
+
+    return grams
+
+
+def dist_k(items, k):
+    """
+    Number of unique k-grams divided by the number of tokens
+    :param sequences: a list of sequences of tokens
+    :param k: size of k-gram
+    :return: list of fractions unique/total k-grams in the sequence
+    """
+    refs = list(zip(*items))[0]
+    preds = list(zip(*items))[1]
+    res = []
+    for sequence in preds:
+        sequence = sequence[0]
+        kgrams = get_k_grams(sequence, k)
+        if kgrams is np.nan:
+            res.append(np.nan)
+            continue
+        unique = len(set(kgrams))
+        total = len(sequence) - k + 1
+        res.append(unique / total if total != 0 else np.nan)
+    return res
+
+def ngram_div(sequences, n=3):
+    """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
+    i.e., a list of means.
+    """
+
+    divs = np.array([dist_k(sequences, k) for k in range(1, n + 1)])
+    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number
+
+#### up to here ####
+
 
 def bleu(items):
     """The Bilingual Evaluation Understudy Score, or BLEU for short, is a metric
