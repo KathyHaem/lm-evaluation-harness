@@ -15,6 +15,7 @@ from typing import List, Dict
 
 import fasttext
 import pycountry
+from langcodes import Language, standardize_tag
 import requests
 import wget
 from sacrebleu import sacrebleu
@@ -32,7 +33,7 @@ except ImportError:
 try:
     import jieba
     jieba.dt.tmp_dir = os.path.join(os.getcwd(), "jieba_tmp")
-    os.mkdirs(jieba.dt.tmp_dir, exist_ok=True)
+    os.makedirs(jieba.dt.tmp_dir, exist_ok=True)
 
     HAS_JIEBA = True
 except ImportError:
@@ -202,6 +203,9 @@ class GeneralTranslationTask(Task):
             doc["ref"] = NO_SPACE_LANG[tar_lang_code]([doc["ref"]])[0]
             results = NO_SPACE_LANG[tar_lang_code](results)
 
+        # normalise language code with langcodes library
+        tar_lang_code = Language.get(tar_lang_code).language
+
         # These metrics are corpus-level not sentence level, so we'll hide the
         # results in this dict and compute the corpus score in the aggregate method
         ref_pred = (doc["ref"], results)
@@ -214,19 +218,20 @@ class GeneralTranslationTask(Task):
         }
 
     def load_lang_id_model(self):
-        if not os.path.isfile("../../lid201-model.ftz"):
-            wget.download("https://data.statmt.org/lid/lid201-model.ftz", out="../../")
-        self.lang_id_model = fasttext.load_model("../../lid201-model.ftz")
+        # lid_model = "../../lid201-model.ftz"  # wikimedia one
+        lid_model = "../../model.bin"  # glotlid one, seems better
+        if not os.path.isfile(lid_model):
+            # model_url = "https://data.statmt.org/lid/lid201-model.ftz"  # wikimedia one
+            model_url = "https://huggingface.co/cis-lmu/glotlid/resolve/main/model.bin"  # glotlid one
+            wget.download(model_url, out="../../")
+        self.lang_id_model = fasttext.load_model(lid_model)
 
     def lang_id(self, item):
         if not self.lang_id_model:
-            pass
-            # todo load the fasttext model
-        # todo load the fasttext model ourselves, but I wanted to see results faster
-        inference_url = 'https://api.wikimedia.org/service/lw/inference/v1/models/langid:predict'
-        data = {"text": item}
-        response = requests.post(inference_url, headers={}, data=json.dumps(data))
-        lang_code = response.json()["wikicode"]
+            self.load_lang_id_model()
+        pred = self.lang_id_model.predict(text=item)
+        pred = pred[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
+        lang_code = Language.get(pred).language
         return lang_code
 
     def aggregation(self):
