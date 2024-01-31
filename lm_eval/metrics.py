@@ -168,15 +168,13 @@ def get_k_grams(sequence, k):
     return grams
 
 
-def dist_k(items, k):
+def dist_k(preds, k):
     """
     Number of unique k-grams divided by the number of tokens
     :param sequences: a list of sequences of tokens
     :param k: size of k-gram
     :return: list of fractions unique/total k-grams in the sequence
     """
-    refs = list(zip(*items))[0]
-    preds = list(zip(*items))[1]
     res = []
     for sequence in preds:
         sequence = sequence[0]
@@ -193,9 +191,9 @@ def ngram_div(sequences, n=3):
     """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
     i.e., a list of means.
     """
-
-    divs = np.array([dist_k(sequences, k) for k in range(1, n + 1)])
-    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number
+    preds = list(zip(*sequences))[1]
+    divs = np.array([dist_k(preds, k) for k in range(1, n + 1)])
+    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number, just taking trigram diversity
 
 #### up to here ####
 
