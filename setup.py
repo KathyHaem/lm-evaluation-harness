@@ -24,6 +24,9 @@ setuptools.setup(
     python_requires=">=3.9",
     install_requires=[
         "datasets>=2.0.0",
+        "wget",
+        "langcodes",
+        "fasttext",
         "einops",
         "jsonlines",
         "numexpr",
@@ -34,7 +37,7 @@ setuptools.setup(
         "pycountry",
         "pytablewriter",
         "rouge-score>=0.0.4",
-        "sacrebleu==1.5.0",
+        "sacrebleu==2.3.3",
         "scikit-learn>=0.24.1",
         "sqlitedict",
         "torch>=1.7",
