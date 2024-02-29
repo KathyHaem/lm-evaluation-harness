@@ -3,7 +3,7 @@ import random
 import transformers
 
 from lm_eval import evaluator, tasks
-from lm_eval.base import LM
+from lm_eval.api.model import LM
 
 
 class DryrunLM(LM):

@@ -2,7 +2,6 @@ import logging
 import math
 import random
 from collections.abc import Iterable
-from typing import List
 
 import evaluate as hf_evaluate
 import numpy as np
@@ -11,6 +10,7 @@ import sklearn.metrics
 
 from lm_eval.api.registry import register_aggregation, register_metric
 
+from typing import List, Tuple
 
 eval_logger = logging.getLogger("lm-eval")
 
@@ -349,6 +349,97 @@ def weighted_mean(items):
     return sum(a) / sum(b)
 
 
+#### from https://github.com/gianwiher/decoding-NLG ####
+
+def calc_repetitions(sequences):
+    """
+    code adapted from https://github.com/ari-holtzman/degen/blob/master/metrics/repetition.py
+
+    returns a list of dicts which contains detailed fields on how each
+    example is repeating itself, specifically the phrase the generation is repeating
+    and how many times it is repeated.
+    """
+
+    objs = []
+    max_n = 90
+    n_repeated_examples = 0
+
+    for gen in sequences:
+        obj = {}
+        rev_gen = list(reversed(gen))
+        last_n_repeats = [0] * max_n
+
+        for n in range(1, max_n + 1):
+            n_repeat = 1
+            while (
+                len(rev_gen[n * n_repeat : n * (n_repeat + 1)]) == n
+                and rev_gen[n * n_repeat : n * (n_repeat + 1)] == rev_gen[:n]
+            ):
+                n_repeat += 1
+            last_n_repeats[n - 1] = n_repeat
+        max_repeated_n = max(range(max_n), key=lambda x: last_n_repeats[x])
+        if last_n_repeats[max_repeated_n] > 1 and (
+            max_repeated_n + 1 >= 3 or last_n_repeats[max_repeated_n] > 50
+        ):
+            obj["repetition"] = {
+                "repeated_phrase": list(reversed(rev_gen[: max_repeated_n + 1])),
+                "repeated_times": last_n_repeats[max_repeated_n],
+                "repeated_phrase_length": max_repeated_n + 1,
+            }
+            n_repeated_examples += 1
+        else:
+            obj["repetition"] = None
+
+        objs.append(obj)
+
+    return objs
+
+
+def get_k_grams(sequence, k):
+    """Returns the k-grams of the input sequence"""
+
+    grams = []
+    if len(sequence) < k:
+        print(f"Warning: input sequence len is {len(sequence)} but k is {k}")
+        return np.nan
+
+    for i in range(len(sequence) - k + 1):
+        grams.append(tuple(sequence[i : i + k]))
+
+    return grams
+
+
+def dist_k(items, k):
+    """
+    Number of unique k-grams divided by the number of tokens
+    :param sequences: a list of sequences of tokens
+    :param k: size of k-gram
+    :return: list of fractions unique/total k-grams in the sequence
+    """
+    refs = list(zip(*items))[0]
+    preds = list(zip(*items))[1]
+    res = []
+    for sequence in preds:
+        sequence = sequence[0]
+        kgrams = get_k_grams(sequence, k)
+        if kgrams is np.nan:
+            res.append(np.nan)
+            continue
+        unique = len(set(kgrams))
+        total = len(sequence) - k + 1
+        res.append(unique / total if total != 0 else np.nan)
+    return res
+
+def ngram_div(sequences, n=3):
+    """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
+    i.e., a list of means.
+    """
+
+    divs = np.array([dist_k(sequences, k) for k in range(1, n + 1)])
+    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number
+
+#### up to here ####
+
 def is_non_str_iterable(obj):
     return isinstance(obj, Iterable) and not isinstance(obj, str)
 
@@ -414,6 +505,7 @@ def bootstrap_stderr(f, xs, iters):
     from tqdm import tqdm
 
     print("bootstrapping for stddev:", f.__name__)
+    # this loop is what actually wound up calling sacrebleu a thousand times
     for bootstrap in tqdm(
         pool.imap(
             _bootstrap_internal(f, chunk_size),
@@ -428,19 +520,47 @@ def bootstrap_stderr(f, xs, iters):
     return sample_stddev(res)
 
 
+def bootstrap_sacrebleu(f, xs: List[Tuple[str, List[str]]], iters):
+    """
+    f: metric function, if called will go through sacrebleu
+    xs: items = List of Tuples where 0 is reference, 1 is a list of hypotheses (contains one)
+    iters: int how many iterations to run the bootstrapping for
+    """
+
+    metrics = {
+        "bleu": sacrebleu.BLEU,
+        "chrf": sacrebleu.CHRF,
+        "ter": sacrebleu.TER
+    }
+
+    metric_name = f.__name__
+    refs = list(zip(*xs))[0]
+    preds = list(zip(*xs))[1]
+    refs, preds = _sacreformat(refs, preds)
+    metric = metrics[metric_name]()
+    score = metric.corpus_score(hypotheses=preds, references=refs, n_bootstrap=iters)
+    return score._ci
+
+
 def stderr_for_metric(metric, bootstrap_iters):
     bootstrappable = [
         median,
         matthews_corrcoef,
         f1_score,
-        perplexity,
+        perplexity
+    ]
+
+    sacrebleu_bootstrappable = [
         bleu,
         chrf,
-        ter,
+        ter
     ]
 
     if metric in bootstrappable:
         return lambda x: bootstrap_stderr(metric, x, iters=bootstrap_iters)
+
+    if metric in sacrebleu_bootstrappable:
+        return lambda x: bootstrap_sacrebleu(metric, x, iters=bootstrap_iters)
 
     stderr = {mean: mean_stderr, acc_all: acc_all_stderr}
 

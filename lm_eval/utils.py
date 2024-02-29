@@ -166,6 +166,15 @@ def make_disjoint_window(pair):
     return a[: len(a) - (len(b) - 1)], b
 
 
+def split_and_pad_windows(rolling_token_windows, pad_token_id: int, max_seq_len: int):
+    contexts = list(list(zip(*rolling_token_windows))[0])
+    conts = list(list(zip(*rolling_token_windows))[1])  # + [pad_token_id]
+
+    # TODO i think pad to max length in batch -- that said we only ever get one item in here currently
+
+    return contexts, conts
+
+
 class Reorderer:
     def __init__(self, arr: List[Any], fn: Callable) -> None:
         """Reorder an array according to some function

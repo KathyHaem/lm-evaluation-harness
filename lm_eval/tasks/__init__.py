@@ -272,7 +272,7 @@ class TaskManager:
         return self._load_individual_task_or_group(config)
 
     def _get_task_and_group(self, task_dir: str):
-        """Creates an dictionary of tasks index with the following metadata,
+        """Creates a dictionary of tasks indexed with the following metadata,
         - `type`, that can be either `task`, `python_task`, or `group`.
             `task` refer to regular task configs, `python_task` are special
             yaml files that only consists of `task` and `class` parameters.
