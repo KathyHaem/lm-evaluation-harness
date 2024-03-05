@@ -323,20 +323,16 @@ def trigram_div_fn(items):  # this is a passthrough function
     output_type="generate_until",
     aggregation="mean"
 )
-def lang_id_fn(items):
-    # todo I'm unfortunately unsure if we get one item or many at this point
+def lang_id_fn(item):
     if not LANG_ID_MODEL:
         load_lang_id_model()
-    refs = list(zip(*items))[0]
-    preds = list(zip(*items))[1]
-    # todo i PROBABLY don't even need this reformatting if i'm predicting both. they should just have the same pred
-    pred_id = LANG_ID_MODEL.predict(text=preds[0])
+    ref = item[0]
+    pred = item[1]
+    pred_id = LANG_ID_MODEL.predict(text=pred)
     pred_id = pred_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
-    pred_lang_code = Language.get(pred_id).language
-    ref_id = LANG_ID_MODEL.predict(text=refs[0])
+    ref_id = LANG_ID_MODEL.predict(text=ref)
     ref_id = ref_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
-    ref_lang_code = Language.get(ref_id).language
-    return ref_lang_code == pred_lang_code
+    return ref_id == pred_id
 
 
 @register_metric(
@@ -465,7 +461,6 @@ def dist_k(preds, k):
     """
     res = []
     for sequence in preds:
-        sequence = sequence[0]
         kgrams = get_k_grams(sequence, k)
         if kgrams is np.nan:
             res.append(np.nan)
