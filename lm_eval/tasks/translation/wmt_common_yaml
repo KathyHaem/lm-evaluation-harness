@@ -7,6 +7,8 @@ metric_list:
   - metric: bleu
   - metric: ter
   - metric: chrf
+  - metric: trigram_div
+  - metric: lang_id
 generation_kwargs:
   until:
     - "\n"

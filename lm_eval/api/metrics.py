@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import random
 from collections.abc import Iterable
 
@@ -7,12 +8,16 @@ import evaluate as hf_evaluate
 import numpy as np
 import sacrebleu
 import sklearn.metrics
+import wget
+import fasttext
+from langcodes import Language, standardize_tag
 
 from lm_eval.api.registry import register_aggregation, register_metric
 
 from typing import List, Tuple
 
 eval_logger = logging.getLogger("lm-eval")
+LANG_ID_MODEL: fasttext.FastText = None
 
 
 # Register Aggregations First
@@ -92,7 +97,7 @@ def chrf(items):
     Source: https://github.com/m-popovic/chrF
     Paper: https://www.aclweb.org/anthology/W15-3049.pdf
 
-    Higher is better  # TODO I think
+    Higher is better
     """
     refs = list(zip(*items))[0]
     preds = list(zip(*items))[1]
@@ -114,6 +119,16 @@ def ter(items):
     preds = list(zip(*items))[1]
     refs, preds = _sacreformat(refs, preds)
     return sacrebleu.corpus_ter(preds, refs).score
+
+
+@register_aggregation("ngram_div")
+def ngram_div(sequences, n=3):
+    """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
+    i.e., a list of means.
+    """
+    preds = list(zip(*sequences))[1]
+    divs = np.array([dist_k(preds, k) for k in range(1, n + 1)])
+    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number, just taking trigram diversity
 
 
 @register_aggregation("brier_score")
@@ -293,6 +308,38 @@ def ter_fn(items):  # This is a passthrough function
 
 
 @register_metric(
+    metric="trigram_div",
+    higher_is_better=True,
+    output_type="generate_until",
+    aggregation="ngram_div"
+)
+def trigram_div_fn(items):  # this is a passthrough function
+    return items
+
+
+@register_metric(
+    metric="lang_id",
+    higher_is_better=True,
+    output_type="generate_until",
+    aggregation="mean"
+)
+def lang_id_fn(items):
+    # todo I'm unfortunately unsure if we get one item or many at this point
+    if not LANG_ID_MODEL:
+        load_lang_id_model()
+    refs = list(zip(*items))[0]
+    preds = list(zip(*items))[1]
+    # todo i PROBABLY don't even need this reformatting if i'm predicting both. they should just have the same pred
+    pred_id = LANG_ID_MODEL.predict(text=preds[0])
+    pred_id = pred_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
+    pred_lang_code = Language.get(pred_id).language
+    ref_id = LANG_ID_MODEL.predict(text=refs[0])
+    ref_id = ref_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
+    ref_lang_code = Language.get(ref_id).language
+    return ref_lang_code == pred_lang_code
+
+
+@register_metric(
     metric="acc_all",
     higher_is_better=True,
     output_type="loglikelihood",
@@ -409,15 +456,13 @@ def get_k_grams(sequence, k):
     return grams
 
 
-def dist_k(items, k):
+def dist_k(preds, k):
     """
     Number of unique k-grams divided by the number of tokens
     :param sequences: a list of sequences of tokens
     :param k: size of k-gram
     :return: list of fractions unique/total k-grams in the sequence
     """
-    refs = list(zip(*items))[0]
-    preds = list(zip(*items))[1]
     res = []
     for sequence in preds:
         sequence = sequence[0]
@@ -430,15 +475,19 @@ def dist_k(items, k):
         res.append(unique / total if total != 0 else np.nan)
     return res
 
-def ngram_div(sequences, n=3):
-    """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
-    i.e., a list of means.
-    """
-
-    divs = np.array([dist_k(sequences, k) for k in range(1, n + 1)])
-    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number
 
 #### up to here ####
+
+def load_lang_id_model():
+    # lid_model = "../../lid201-model.ftz"  # wikimedia one
+    lid_model = "../../model.bin"  # glotlid one, seems better
+    if not os.path.isfile(lid_model):
+        # model_url = "https://data.statmt.org/lid/lid201-model.ftz"  # wikimedia one
+        model_url = "https://huggingface.co/cis-lmu/glotlid/resolve/main/model.bin"  # glotlid one
+        wget.download(model_url, out="../../")
+    global LANG_ID_MODEL
+    LANG_ID_MODEL = fasttext.load_model(lid_model)
+
 
 def is_non_str_iterable(obj):
     return isinstance(obj, Iterable) and not isinstance(obj, str)
