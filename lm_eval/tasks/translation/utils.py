@@ -1,6 +1,7 @@
 import argparse
 
 import yaml
+import sacrebleu
 
 
 try:
@@ -27,7 +28,8 @@ gpt3_translation_benchmarks = {
 # 28 total
 LANGUAGES = {
     **gpt3_translation_benchmarks,
-    # "wmt20": sacrebleu.get_langpairs_for_testset("wmt20"),
+    "wmt20": sacrebleu.get_langpairs_for_testset("wmt20"),
+    "wmt23": sacrebleu.get_langpairs_for_testset("wmt23"),
     "iwslt2017": ["en-ar"],  # Arabic
 }
 
