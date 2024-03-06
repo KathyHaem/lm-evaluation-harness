@@ -794,7 +794,8 @@ class ConfigurableTask(Task):
         self.task_docs = self.eval_docs
 
         # Test One Doc
-        self.features = list(self.task_docs.features.keys())
+        if isinstance(self.task_docs, datasets.Dataset):
+            self.features = list(self.task_docs.features.keys())
         self.multiple_input = 0
         self.multiple_target = 0
         test_doc = self.task_docs[0]

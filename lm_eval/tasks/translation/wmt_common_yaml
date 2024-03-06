@@ -1,7 +1,4 @@
 output_type: generate_until
-training_split: train
-validation_split: validation
-fewshot_split: validation
 test_split: test
 metric_list:
   - metric: bleu
@@ -17,3 +14,4 @@ generation_kwargs:
 repeats: 1
 metadata:
   version: 1.0
+class: !function task.GeneralTranslationTask
