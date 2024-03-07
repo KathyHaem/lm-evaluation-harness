@@ -1,5 +1,6 @@
 import logging
 import math
+import os
 import random
 from collections.abc import Iterable
 from typing import List
@@ -8,11 +9,15 @@ import evaluate as hf_evaluate
 import numpy as np
 import sacrebleu
 import sklearn.metrics
+import wget
+import fasttext
+from langcodes import Language, standardize_tag
 
 from lm_eval.api.registry import register_aggregation, register_metric
 
 
 eval_logger = logging.getLogger("lm-eval")
+LANG_ID_MODEL: fasttext.FastText = None
 
 
 # Register Aggregations First
@@ -92,7 +97,7 @@ def chrf(items):
     Source: https://github.com/m-popovic/chrF
     Paper: https://www.aclweb.org/anthology/W15-3049.pdf
 
-    Higher is better  # TODO I think
+    Higher is better
     """
     refs = list(zip(*items))[0]
     preds = list(zip(*items))[1]
@@ -114,6 +119,16 @@ def ter(items):
     preds = list(zip(*items))[1]
     refs, preds = _sacreformat(refs, preds)
     return sacrebleu.corpus_ter(preds, refs).score
+
+
+@register_aggregation("ngram_div")
+def ngram_div(sequences, n=3):
+    """Returns the mean of the fraction of unique k-grams for k in {1,...,n}.
+    i.e., a list of means.
+    """
+    preds = list(zip(*sequences))[1]
+    divs = np.array([dist_k(preds, k) for k in range(1, n + 1)])
+    return divs.mean(axis=0).tolist()[2]  # am reducing it to one number, just taking trigram diversity
 
 
 @register_aggregation("brier_score")
@@ -293,6 +308,38 @@ def ter_fn(items):  # This is a passthrough function
 
 
 @register_metric(
+    metric="trigram_div",
+    higher_is_better=True,
+    output_type="generate_until",
+    aggregation="ngram_div"
+)
+def trigram_div_fn(items):  # this is a passthrough function
+    return items
+
+
+@register_metric(
+    metric="lang_id",
+    higher_is_better=True,
+    output_type="generate_until",
+    aggregation="mean"
+)
+def lang_id_fn(items):
+    # todo I'm unfortunately unsure if we get one item or many at this point
+    if not LANG_ID_MODEL:
+        load_lang_id_model()
+    refs = list(zip(*items))[0]
+    preds = list(zip(*items))[1]
+    # todo i PROBABLY don't even need this reformatting if i'm predicting both. they should just have the same pred
+    pred_id = LANG_ID_MODEL.predict(text=preds[0])
+    pred_id = pred_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
+    pred_lang_code = Language.get(pred_id).language
+    ref_id = LANG_ID_MODEL.predict(text=refs[0])
+    ref_id = ref_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
+    ref_lang_code = Language.get(ref_id).language
+    return ref_lang_code == pred_lang_code
+
+
+@register_metric(
     metric="acc_all",
     higher_is_better=True,
     output_type="loglikelihood",
@@ -347,6 +394,99 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 def weighted_mean(items):
     a, b = zip(*items)
     return sum(a) / sum(b)
+
+
+#### from https://github.com/gianwiher/decoding-NLG ####
+
+def calc_repetitions(sequences):
+    """
+    code adapted from https://github.com/ari-holtzman/degen/blob/master/metrics/repetition.py
+
+    returns a list of dicts which contains detailed fields on how each
+    example is repeating itself, specifically the phrase the generation is repeating
+    and how many times it is repeated.
+    """
+
+    objs = []
+    max_n = 90
+    n_repeated_examples = 0
+
+    for gen in sequences:
+        obj = {}
+        rev_gen = list(reversed(gen))
+        last_n_repeats = [0] * max_n
+
+        for n in range(1, max_n + 1):
+            n_repeat = 1
+            while (
+                len(rev_gen[n * n_repeat : n * (n_repeat + 1)]) == n
+                and rev_gen[n * n_repeat : n * (n_repeat + 1)] == rev_gen[:n]
+            ):
+                n_repeat += 1
+            last_n_repeats[n - 1] = n_repeat
+        max_repeated_n = max(range(max_n), key=lambda x: last_n_repeats[x])
+        if last_n_repeats[max_repeated_n] > 1 and (
+            max_repeated_n + 1 >= 3 or last_n_repeats[max_repeated_n] > 50
+        ):
+            obj["repetition"] = {
+                "repeated_phrase": list(reversed(rev_gen[: max_repeated_n + 1])),
+                "repeated_times": last_n_repeats[max_repeated_n],
+                "repeated_phrase_length": max_repeated_n + 1,
+            }
+            n_repeated_examples += 1
+        else:
+            obj["repetition"] = None
+
+        objs.append(obj)
+
+    return objs
+
+
+def get_k_grams(sequence, k):
+    """Returns the k-grams of the input sequence"""
+
+    grams = []
+    if len(sequence) < k:
+        print(f"Warning: input sequence len is {len(sequence)} but k is {k}")
+        return np.nan
+
+    for i in range(len(sequence) - k + 1):
+        grams.append(tuple(sequence[i : i + k]))
+
+    return grams
+
+
+def dist_k(preds, k):
+    """
+    Number of unique k-grams divided by the number of tokens
+    :param sequences: a list of sequences of tokens
+    :param k: size of k-gram
+    :return: list of fractions unique/total k-grams in the sequence
+    """
+    res = []
+    for sequence in preds:
+        sequence = sequence[0]
+        kgrams = get_k_grams(sequence, k)
+        if kgrams is np.nan:
+            res.append(np.nan)
+            continue
+        unique = len(set(kgrams))
+        total = len(sequence) - k + 1
+        res.append(unique / total if total != 0 else np.nan)
+    return res
+
+
+#### up to here ####
+
+def load_lang_id_model():
+    # lid_model = "../../lid201-model.ftz"  # wikimedia one
+    lid_model = "../../model.bin"  # glotlid one, seems better
+    if not os.path.isfile(lid_model):
+        # model_url = "https://data.statmt.org/lid/lid201-model.ftz"  # wikimedia one
+        model_url = "https://huggingface.co/cis-lmu/glotlid/resolve/main/model.bin"  # glotlid one
+        wget.download(model_url, out="../../")
+    global LANG_ID_MODEL
+    LANG_ID_MODEL = fasttext.load_model(lid_model)
 
 
 def is_non_str_iterable(obj):
