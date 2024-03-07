@@ -3,7 +3,7 @@ import math
 import os
 import random
 from collections.abc import Iterable
-from typing import List
+from typing import List, Tuple
 
 import evaluate as hf_evaluate
 import numpy as np
@@ -518,9 +518,8 @@ def _sacreformat(refs, preds):
 
 # stderr stuff
 
-
 class _bootstrap_internal:
-    def __init__(self, f, n) -> None:
+    def __init__(self, f, n):
         self.f = f
         self.n = n
 
@@ -549,6 +548,7 @@ def bootstrap_stderr(f, xs, iters):
     from tqdm import tqdm
 
     print("bootstrapping for stddev:", f.__name__)
+    # this loop is what actually wound up calling sacrebleu a thousand times
     for bootstrap in tqdm(
         pool.imap(
             _bootstrap_internal(f, chunk_size),
@@ -563,19 +563,47 @@ def bootstrap_stderr(f, xs, iters):
     return sample_stddev(res)
 
 
+def bootstrap_sacrebleu(f, xs: List[Tuple[str, List[str]]], iters):
+    """
+    f: metric function, if called will go through sacrebleu
+    xs: items = List of Tuples where 0 is reference, 1 is a list of hypotheses (contains one)
+    iters: int how many iterations to run the bootstrapping for
+    """
+
+    metrics = {
+        "bleu": sacrebleu.BLEU,
+        "chrf": sacrebleu.CHRF,
+        "ter": sacrebleu.TER
+    }
+
+    metric_name = f.__name__
+    refs = list(zip(*xs))[0]
+    preds = list(zip(*xs))[1]
+    refs, preds = _sacreformat(refs, preds)
+    metric = metrics[metric_name]()
+    score = metric.corpus_score(hypotheses=preds, references=refs, n_bootstrap=iters)
+    return score._ci
+
+
 def stderr_for_metric(metric, bootstrap_iters):
     bootstrappable = [
         median,
         matthews_corrcoef,
         f1_score,
-        perplexity,
+        perplexity
+    ]
+
+    sacrebleu_bootstrappable = [
         bleu,
         chrf,
-        ter,
+        ter
     ]
 
     if metric in bootstrappable:
         return lambda x: bootstrap_stderr(metric, x, iters=bootstrap_iters)
+
+    if metric in sacrebleu_bootstrappable:
+        return lambda x: bootstrap_sacrebleu(metric, x, iters=bootstrap_iters)
 
     stderr = {mean: mean_stderr, acc_all: acc_all_stderr}
 
