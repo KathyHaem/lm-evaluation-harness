@@ -133,10 +133,13 @@ class GeneralTranslationTask(ConfigurableTask):
         super().__init__(config=config)
 
     def download(self, data_dir=None, cache_dir=None, download_mode=None):
-        # This caches in the users home dir automatically
-        self.src_file, self.ref_file, _, _, _ = sacrebleu.download_test_set(
+        # This caches in the users home dir automatically, returns a list in newer versions
+        task_files = sacrebleu.download_test_set(
             self.sacrebleu_dataset, self.sacrebleu_language_pair
         )
+        print(task_files)
+        self.src_file = task_files[0]
+        self.ref_file = task_files[1]
         self.src_data, self.ref_data = [
             [line.rstrip() for line in sacrebleu.smart_open(file)]
             for file in (self.src_file, self.ref_file)
