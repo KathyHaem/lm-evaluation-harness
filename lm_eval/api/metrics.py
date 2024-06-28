@@ -323,11 +323,11 @@ def trigram_div_fn(items):  # this is a passthrough function
     output_type="generate_until",
     aggregation="mean"
 )
-def lang_id_fn(item):
+def lang_id_fn(references: list, predictions: list):
     if not LANG_ID_MODEL:
         load_lang_id_model()
-    ref = item[0]
-    pred = item[1]
+    ref = references[0]
+    pred = predictions[0]
     pred_id = LANG_ID_MODEL.predict(text=pred)
     pred_id = pred_id[0][0].split("__")[2]  # actual output format: (('__label__eng_Latn',), array([1.00001001]))
     ref_id = LANG_ID_MODEL.predict(text=ref)
@@ -475,11 +475,11 @@ def dist_k(preds, k):
 
 def load_lang_id_model():
     # lid_model = "../../lid201-model.ftz"  # wikimedia one
-    lid_model = "../../model.bin"  # glotlid one, seems better
+    lid_model = "./model.bin"  # glotlid one, seems better
     if not os.path.isfile(lid_model):
         # model_url = "https://data.statmt.org/lid/lid201-model.ftz"  # wikimedia one
         model_url = "https://huggingface.co/cis-lmu/glotlid/resolve/main/model.bin"  # glotlid one
-        wget.download(model_url, out="../../")
+        wget.download(model_url, out=".")
     global LANG_ID_MODEL
     LANG_ID_MODEL = fasttext.load_model(lid_model)
 
