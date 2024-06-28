@@ -54,6 +54,7 @@ def simple_evaluate(
     random_seed: int = 0,
     numpy_random_seed: int = 1234,
     torch_random_seed: int = 1234,
+    load_in_8bit: bool = False,
 ):
     """Instantiate and evaluate a model on a list of tasks.
 
@@ -144,6 +145,13 @@ def simple_evaluate(
         if gen_kwargs == "":
             gen_kwargs = None
 
+    if load_in_8bit:
+        quantization_config = {
+            "load_in_8bit": True
+        }
+    else:
+        quantization_config = None
+
     if isinstance(model, str):
         if model_args is None:
             model_args = ""
@@ -155,6 +163,7 @@ def simple_evaluate(
                     "batch_size": batch_size,
                     "max_batch_size": max_batch_size,
                     "device": device,
+                    "quantization_config": quantization_config
                 },
             )
 
@@ -165,6 +174,7 @@ def simple_evaluate(
                     "batch_size": batch_size,
                     "max_batch_size": max_batch_size,
                     "device": device,
+                    "quantization_config": quantization_config
                 },
             )
     else:

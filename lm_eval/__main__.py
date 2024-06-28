@@ -208,6 +208,12 @@ def parse_eval_args() -> argparse.Namespace:
         action="store_true",
         help="Sets trust_remote_code to True to execute code to create HF Datasets from the Hub",
     )
+    parser.add_argument(
+        "--load_in_8bit",
+        action="store_true",
+        help="Pass a quantization config to the pretrained model args, with load_in_8bit=True",
+        # also potentially whatever other parameters seems sensible, idk I haven't done this before
+    )
 
     return parser.parse_args()
 
@@ -334,6 +340,7 @@ def cli_evaluate(args: Union[argparse.Namespace, None] = None) -> None:
         random_seed=args.seed[0],
         numpy_random_seed=args.seed[1],
         torch_random_seed=args.seed[2],
+        load_in_8bit=args.load_in_8bit,
         **request_caching_args,
     )
 
