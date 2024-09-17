@@ -1,14 +1,19 @@
 from . import (
     anthropic_llms,
+    api_models,
     dummy,
     gguf,
+    hf_vlms,
     huggingface,
     mamba_lm,
+    nemo_lm,
+    neuralmagic,
     neuron_optimum,
     openai_completions,
     optimum_lm,
     textsynth,
     vllm_causallms,
+    vllm_vlms,
 )
 
 
