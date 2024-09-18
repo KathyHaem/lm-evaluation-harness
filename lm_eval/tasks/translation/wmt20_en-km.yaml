@@ -4,10 +4,9 @@ dataset_path: wmt20
 doc_to_target: ' {{translation["km"]}}'
 doc_to_text: 'English phrase: {{translation["en"]}}
 
-  Khmer phrase:'
-group:
-- generate_until
+  Central Khmer phrase:'
+include: wmt_common_yaml
+tag:
 - translation
 - wmt20
-include: wmt_common_yaml
 task: wmt20-en-km

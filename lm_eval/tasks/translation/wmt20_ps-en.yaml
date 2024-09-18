@@ -5,9 +5,8 @@ doc_to_target: ' {{translation["en"]}}'
 doc_to_text: 'Pushto phrase: {{translation["ps"]}}
 
   English phrase:'
-group:
-- generate_until
+include: wmt_common_yaml
+tag:
 - translation
 - wmt20
-include: wmt_common_yaml
 task: wmt20-ps-en

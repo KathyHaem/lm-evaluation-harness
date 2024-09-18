@@ -5,9 +5,8 @@ doc_to_target: ' {{translation["de"]}}'
 doc_to_text: 'French phrase: {{translation["fr"]}}
 
   German phrase:'
-group:
-- generate_until
+include: wmt_common_yaml
+tag:
 - translation
 - wmt20
-include: wmt_common_yaml
 task: wmt20-fr-de

@@ -5,9 +5,9 @@ doc_to_target: ' {{translation["en"]}}'
 doc_to_text: 'German phrase: {{translation["de"]}}
 
   English phrase:'
+include: wmt_common_yaml
 tag:
 - translation
 - wmt16
 - gpt3_translation_benchmarks
-include: wmt_common_yaml
 task: wmt16-de-en

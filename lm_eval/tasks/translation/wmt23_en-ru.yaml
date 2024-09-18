@@ -5,9 +5,8 @@ doc_to_target: ' {{translation["ru"]}}'
 doc_to_text: 'English phrase: {{translation["en"]}}
 
   Russian phrase:'
-group:
-- generate_until
+include: wmt_common_yaml
+tag:
 - translation
 - wmt23
-include: wmt_common_yaml
 task: wmt23-en-ru

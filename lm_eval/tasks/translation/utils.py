@@ -64,6 +64,7 @@ def gen_lang_yamls(output_dir: str, overwrite: bool) -> None:
                     yaml.dump(
                         {
                             "tag": tags,
+                            "include": "wmt_common_yaml",
                             "dataset_path": task,
                             "dataset_name": lang_pair
                             if not (task == "iwslt2017")

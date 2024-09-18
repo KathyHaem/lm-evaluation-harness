@@ -5,8 +5,8 @@ doc_to_target: ' {{translation["en"]}}'
 doc_to_text: 'Arabic phrase: {{translation["ar"]}}
 
   English phrase:'
+include: wmt_common_yaml
 tag:
 - translation
 - iwslt2017
-include: wmt_common_yaml
 task: iwslt2017-ar-en

@@ -5,9 +5,9 @@ doc_to_target: ' {{translation["ro"]}}'
 doc_to_text: 'English phrase: {{translation["en"]}}
 
   Romanian phrase:'
+include: wmt_common_yaml
 tag:
 - translation
 - wmt16
 - gpt3_translation_benchmarks
-include: wmt_common_yaml
 task: wmt16-en-ro
